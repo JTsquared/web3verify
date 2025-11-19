@@ -52,6 +52,7 @@ async function handleOAuthCallback(req, res) {
     });
 
     const user = userResponse.data;
+    console.log(`OAuth success for user: ${user.username} (${user.id})`);
 
     // Store user in session
     req.session.discordUser = {
@@ -61,8 +62,15 @@ async function handleOAuthCallback(req, res) {
       avatar: user.avatar
     };
 
-    // Redirect to verification page
-    res.redirect('/verify');
+    // Save session before redirect (important!)
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.status(500).send('Session error. Please try again.');
+      }
+      // Redirect to verification page
+      res.redirect('/verify');
+    });
 
   } catch (error) {
     console.error('OAuth error:', error.response?.data || error.message);

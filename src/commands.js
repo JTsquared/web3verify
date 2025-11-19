@@ -22,10 +22,10 @@ const statusCommand = new SlashCommandBuilder()
   .setName('status')
   .setDescription('Check your verification status and current roles');
 
-// User command: Get verification message
-const getMessageCommand = new SlashCommandBuilder()
-  .setName('getmessage')
-  .setDescription('Get the message to sign with your wallet for verification');
+// User command: Link wallet (new simplified command)
+const linkWalletCommand = new SlashCommandBuilder()
+  .setName('linkwallet')
+  .setDescription('Get the link to verify and link your wallet');
 
 // User command: List wallets
 const walletsCommand = new SlashCommandBuilder()
@@ -115,11 +115,11 @@ const reverifyCommand = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 module.exports = [
-  verifyCommand,
+  linkWalletCommand,
   statusCommand,
-  getMessageCommand,
   walletsCommand,
   removeWalletCommand,
+  verifyCommand, // Keep for manual verification (advanced users)
   addRoleCommand,
   listRolesCommand,
   removeRoleCommand,

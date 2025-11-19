@@ -13,16 +13,13 @@ function getVerificationMessage() {
 }
 
 /**
- * Handle /getmessage command
+ * Handle /linkwallet command (new simplified version)
  */
-async function handleGetMessage(interaction) {
-  const message = getVerificationMessage();
-
-  // Get the web verification URL (from environment or construct from deployment)
+async function handleLinkWallet(interaction) {
   const webUrl = process.env.WEB_URL || 'http://localhost:3000/verify';
 
   await interaction.reply({
-    content: `**Option 1: Use Web Interface (Easiest)** ✨\n🔗 ${webUrl}\nClick the link above to verify with MetaMask or any wallet!\n\n**Option 2: Manual Verification**\nSign this message with your wallet:\n\`\`\`\n${message}\n\`\`\`\n\n**How to sign manually:**\n• **MetaMask**: Open browser console (F12), use \`ethereum.request()\`\n• **MyEtherWallet**: https://www.myetherwallet.com/wallet/sign\n• **Any wallet**: Sign the message above\n\nThen use: \`/verify wallet:0xYour... signature:0xYour...\``,
+    content: `**🔗 Link Your Wallet**\n\nClick the link below to verify your wallet:\n👉 ${webUrl}\n\n**How it works:**\n1️⃣ Login with Discord\n2️⃣ Connect your wallet\n3️⃣ Sign & verify automatically\n\n*No copying or pasting required!* ✨`,
     ephemeral: true
   });
 }
@@ -486,7 +483,7 @@ async function handleRemoveWallet(interaction) {
 }
 
 module.exports = {
-  handleGetMessage,
+  handleLinkWallet,
   handleVerify,
   handleStatus,
   handleWallets,

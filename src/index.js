@@ -61,10 +61,13 @@ async function registerCommands() {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
+  // Log the command for debugging
+  console.log(`Received command: /${interaction.commandName} from ${interaction.user.username}`);
+
   try {
     switch (interaction.commandName) {
-      case 'getmessage':
-        await handlers.handleGetMessage(interaction);
+      case 'linkwallet':
+        await handlers.handleLinkWallet(interaction);
         break;
 
       case 'verify':
@@ -100,23 +103,29 @@ client.on('interactionCreate', async interaction => {
         break;
 
       default:
-        await interaction.reply({
-          content: 'Unknown command',
-          ephemeral: true
-        });
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'Unknown command',
+            ephemeral: true
+          });
+        }
     }
   } catch (error) {
-    console.error('Error handling interaction:', error);
+    console.error(`Error handling /${interaction.commandName}:`, error.message);
 
-    const errorMessage = {
-      content: 'An error occurred while processing your command.',
-      ephemeral: true
-    };
+    try {
+      const errorMessage = {
+        content: 'An error occurred while processing your command.',
+        ephemeral: true
+      };
 
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(errorMessage);
-    } else {
-      await interaction.reply(errorMessage);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(errorMessage).catch(console.error);
+      } else {
+        await interaction.reply(errorMessage).catch(console.error);
+      }
+    } catch (replyError) {
+      console.error('Failed to send error message:', replyError.message);
     }
   }
 });
@@ -147,6 +156,9 @@ process.on('unhandledRejection', error => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (required for Render/Heroku/etc to handle HTTPS correctly)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -158,6 +170,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
