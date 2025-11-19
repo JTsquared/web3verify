@@ -22,12 +22,6 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Initialize MongoDB database
-db.initDatabase().catch(error => {
-  console.error('Failed to initialize database:', error);
-  process.exit(1);
-});
-
 // Create Discord client
 const client = new Client({
   intents: [
@@ -220,12 +214,35 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/verify.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Web server running on port ${PORT}`);
-  console.log(`Verification page: http://localhost:${PORT}/verify`);
-});
+// Start everything in proper order
+async function start() {
+  try {
+    // 1. Initialize MongoDB first
+    console.log('Connecting to MongoDB...');
+    await db.initDatabase();
+    console.log('✓ MongoDB connected');
 
-// Login to Discord
-registerCommands().then(() => {
-  client.login(process.env.DISCORD_TOKEN);
-});
+    // 2. Start Express server
+    app.listen(PORT, () => {
+      console.log(`✓ Web server running on port ${PORT}`);
+      console.log(`  Verification page: http://localhost:${PORT}/verify`);
+    });
+
+    // 3. Register Discord commands
+    console.log('Registering Discord commands...');
+    await registerCommands();
+    console.log('✓ Commands registered');
+
+    // 4. Login to Discord
+    console.log('Logging in to Discord...');
+    await client.login(process.env.DISCORD_TOKEN);
+    console.log('✓ Bot is ready!');
+
+  } catch (error) {
+    console.error('Startup failed:', error);
+    process.exit(1);
+  }
+}
+
+// Start the bot
+start();
