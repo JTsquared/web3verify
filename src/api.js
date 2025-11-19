@@ -57,8 +57,8 @@ async function verifyWallet(req, res) {
 
     // Add wallet to database
     const discordUser = req.session.discordUser;
-    db.addWallet(discordUser.id, walletAddress, discordUser.username);
-    const walletCount = db.getWalletCount(discordUser.id);
+    await db.addWallet(discordUser.id, walletAddress, discordUser.username);
+    const walletCount = await db.getWalletCount(discordUser.id);
 
     console.log(`Wallet ${walletAddress} verified for Discord user ${discordUser.username} (${discordUser.id})`);
 
@@ -80,7 +80,7 @@ async function verifyWallet(req, res) {
           guildsChecked.push(guild.name);
 
           // Get role configs for this guild
-          const roleConfigs = db.getRoleConfigs(guildId);
+          const roleConfigs = await db.getRoleConfigs(guildId);
           if (roleConfigs.length === 0) continue;
 
           // Check each role requirement
@@ -93,7 +93,7 @@ async function verifyWallet(req, res) {
                 if (role && !member.roles.cache.has(config.role_id)) {
                   await member.roles.add(role);
                   rolesAdded.push({ guild: guild.name, role: role.name });
-                  db.logVerification(discordUser.id, guildId, config.role_id, 'added', 'Web verification');
+                  await db.logVerification(discordUser.id, guildId, config.role_id, 'added', 'Web verification');
                   console.log(`Added role ${role.name} in ${guild.name}`);
                 }
               } else {
@@ -111,7 +111,7 @@ async function verifyWallet(req, res) {
             }
           }
 
-          db.updateLastChecked(discordUser.id);
+          await db.updateLastChecked(discordUser.id);
         } catch (error) {
           console.error(`Error processing guild ${guildId}:`, error);
         }
@@ -155,7 +155,7 @@ async function getStatus(req, res) {
   }
 
   const discordUser = req.session.discordUser;
-  const wallets = db.getWallets(discordUser.id);
+  const wallets = await db.getWallets(discordUser.id);
 
   res.json({
     user: discordUser,

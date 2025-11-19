@@ -58,11 +58,11 @@ async function handleVerify(interaction) {
     }
 
     // Add wallet to database (supports multiple wallets)
-    db.addWallet(interaction.user.id, walletAddress, interaction.user.username);
-    const walletCount = db.getWalletCount(interaction.user.id);
+    await db.addWallet(interaction.user.id, walletAddress, interaction.user.username);
+    const walletCount = await db.getWalletCount(interaction.user.id);
 
     // Check all role requirements for this guild
-    const roleConfigs = db.getRoleConfigs(interaction.guild.id);
+    const roleConfigs = await db.getRoleConfigs(interaction.guild.id);
 
     if (roleConfigs.length === 0) {
       return interaction.editReply({
@@ -84,7 +84,7 @@ async function handleVerify(interaction) {
           if (role) {
             await interaction.member.roles.add(role);
             rolesAdded.push(role.name);
-            db.logVerification(interaction.user.id, interaction.guild.id, config.role_id, 'added', 'Initial verification');
+            await db.logVerification(interaction.user.id, interaction.guild.id, config.role_id, 'added', 'Initial verification');
           }
         } else {
           rolesFailed.push({
@@ -101,7 +101,7 @@ async function handleVerify(interaction) {
       }
     }
 
-    db.updateLastChecked(interaction.user.id);
+    await db.updateLastChecked(interaction.user.id);
 
     let responseMessage = `Wallet \`${walletAddress}\` verified successfully!\n`;
     responseMessage += `You now have **${walletCount}** wallet${walletCount > 1 ? 's' : ''} linked.\n\n`;
@@ -131,7 +131,7 @@ async function handleVerify(interaction) {
  * Handle /status command
  */
 async function handleStatus(interaction) {
-  const wallets = db.getWallets(interaction.user.id);
+  const wallets = await db.getWallets(interaction.user.id);
 
   if (!wallets || wallets.length === 0) {
     return interaction.reply({
@@ -140,9 +140,9 @@ async function handleStatus(interaction) {
     });
   }
 
-  const user = db.getUser(interaction.user.id);
-  const history = db.getVerificationHistory(interaction.user.id, 5);
-  const roleConfigs = db.getRoleConfigs(interaction.guild.id);
+  const user = await db.getUser(interaction.user.id);
+  const history = await db.getVerificationHistory(interaction.user.id, 5);
+  const roleConfigs = await db.getRoleConfigs(interaction.guild.id);
 
   let response = `**Your Verification Status**\n\n`;
   response += `**Linked Wallets (${wallets.length}):**\n`;
@@ -230,7 +230,7 @@ async function handleAddRole(interaction) {
  * Handle /listroles command (Admin only)
  */
 async function handleListRoles(interaction) {
-  const roleConfigs = db.getRoleConfigs(interaction.guild.id);
+  const roleConfigs = await db.getRoleConfigs(interaction.guild.id);
 
   if (roleConfigs.length === 0) {
     return interaction.reply({
@@ -289,7 +289,7 @@ async function handleReverify(interaction) {
   try {
     const usersToCheck = targetUser
       ? [db.getUser(targetUser.id)].filter(Boolean)
-      : db.getAllUsers();
+      : await db.getAllUsers();
 
     if (usersToCheck.length === 0) {
       return interaction.editReply({
@@ -297,7 +297,7 @@ async function handleReverify(interaction) {
       });
     }
 
-    const roleConfigs = db.getRoleConfigs(interaction.guild.id);
+    const roleConfigs = await db.getRoleConfigs(interaction.guild.id);
     if (roleConfigs.length === 0) {
       return interaction.editReply({
         content: 'No token-gated roles configured.'
@@ -312,7 +312,7 @@ async function handleReverify(interaction) {
       if (!member) continue;
 
       // Get all wallets for this user
-      const userWallets = db.getWallets(user.discord_id);
+      const userWallets = await db.getWallets(user.discord_id);
       if (userWallets.length === 0) continue;
 
       for (const config of roleConfigs) {
@@ -369,7 +369,7 @@ async function handleReverify(interaction) {
  * Handle /wallets command
  */
 async function handleWallets(interaction) {
-  const wallets = db.getWallets(interaction.user.id);
+  const wallets = await db.getWallets(interaction.user.id);
 
   if (!wallets || wallets.length === 0) {
     return interaction.reply({
@@ -405,7 +405,7 @@ async function handleRemoveWallet(interaction) {
     });
   }
 
-  const wallets = db.getWallets(interaction.user.id);
+  const wallets = await db.getWallets(interaction.user.id);
   const walletExists = wallets.find(w => w.wallet_address.toLowerCase() === walletAddress.toLowerCase());
 
   if (!walletExists) {
@@ -429,12 +429,12 @@ async function handleRemoveWallet(interaction) {
     db.removeWallet(interaction.user.id, walletAddress);
 
     // Trigger re-verification to update roles
-    const roleConfigs = db.getRoleConfigs(interaction.guild.id);
+    const roleConfigs = await db.getRoleConfigs(interaction.guild.id);
     let rolesUpdated = false;
 
     if (roleConfigs.length > 0) {
       const member = interaction.member;
-      const remainingWallets = db.getWallets(interaction.user.id);
+      const remainingWallets = await db.getWallets(interaction.user.id);
 
       for (const config of roleConfigs) {
         try {

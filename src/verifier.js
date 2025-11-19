@@ -46,7 +46,7 @@ class VerificationService {
     console.log(`[${new Date().toISOString()}] Starting periodic verification...`);
 
     try {
-      const users = db.getAllUsers();
+      const users = await db.getAllUsers();
       console.log(`Checking ${users.length} verified users...`);
 
       let totalRolesAdded = 0;
@@ -94,7 +94,7 @@ class VerificationService {
         if (!member) continue;
 
         // Get role configs for this guild
-        const roleConfigs = db.getRoleConfigs(guildId);
+        const roleConfigs = await db.getRoleConfigs(guildId);
         if (roleConfigs.length === 0) continue;
 
         // Check each role requirement
@@ -108,7 +108,7 @@ class VerificationService {
           }
         }
 
-        db.updateLastChecked(user.discord_id);
+        await db.updateLastChecked(user.discord_id);
 
       } catch (error) {
         console.error(`Error processing guild ${guildId} for user ${user.discord_id}:`, error.message);
@@ -127,7 +127,7 @@ class VerificationService {
 
     try {
       // Get all wallets for this user
-      const userWallets = db.getWallets(user.discord_id);
+      const userWallets = await db.getWallets(user.discord_id);
       if (userWallets.length === 0) {
         console.log(`No wallets found for user ${user.discord_id}`);
         return result;
@@ -165,7 +165,7 @@ class VerificationService {
       // Add role if user has tokens but doesn't have role
       if (meetsRequirements && !hasRole) {
         await member.roles.add(role);
-        db.logVerification(
+        await db.logVerification(
           user.discord_id,
           member.guild.id,
           roleConfig.role_id,
@@ -179,7 +179,7 @@ class VerificationService {
       // Remove role if user doesn't have tokens but has role
       if (!meetsRequirements && hasRole) {
         await member.roles.remove(role);
-        db.logVerification(
+        await db.logVerification(
           user.discord_id,
           member.guild.id,
           roleConfig.role_id,
