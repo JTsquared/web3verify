@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes } = require('discord.js');
 const express = require('express');
+const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,6 +9,8 @@ const db = require('./database');
 const commands = require('./commands');
 const handlers = require('./handlers');
 const VerificationService = require('./verifier');
+const oauth = require('./oauth');
+const api = require('./api');
 
 // Validate required environment variables
 const requiredEnvVars = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'AVALANCHE_RPC_URL'];
@@ -144,10 +147,35 @@ process.on('unhandledRejection', error => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session middleware for OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'web3verify-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')));
 
-// API endpoint for bot status
+// OAuth routes
+app.get('/auth/discord', oauth.handleOAuthRedirect);
+app.get('/auth/callback', oauth.handleOAuthCallback);
+app.get('/auth/user', oauth.getCurrentUser);
+app.post('/auth/logout', oauth.handleLogout);
+
+// API routes for wallet verification
+app.post('/api/verify', api.verifyWallet);
+app.get('/api/user/status', api.getStatus);
+
+// Bot status endpoint
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'online',
@@ -162,14 +190,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Verification page (serves the HTML)
+// Verification page (new OAuth-enabled version)
 app.get('/verify', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  res.sendFile(path.join(__dirname, '../public/verify.html'));
 });
 
 // Root redirects to verification page
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  res.sendFile(path.join(__dirname, '../public/verify.html'));
 });
 
 app.listen(PORT, () => {

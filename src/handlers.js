@@ -5,16 +5,18 @@ const blockchainService = new BlockchainService(process.env.AVALANCHE_RPC_URL);
 
 /**
  * Generate verification message for user to sign
+ * Simple format that works with both web interface and manual signing
+ * Note: We don't include wallet address because it's recovered from signature
  */
-function getVerificationMessage(discordId, username) {
-  return `I am verifying my wallet for Discord user ${username} (${discordId}).\n\nTimestamp: ${Date.now()}`;
+function getVerificationMessage() {
+  return `I am verifying my wallet for Web3Verify.\n\nBy signing this message, I prove ownership of my wallet.`;
 }
 
 /**
  * Handle /getmessage command
  */
 async function handleGetMessage(interaction) {
-  const message = getVerificationMessage(interaction.user.id, interaction.user.username);
+  const message = getVerificationMessage();
 
   // Get the web verification URL (from environment or construct from deployment)
   const webUrl = process.env.WEB_URL || 'http://localhost:3000/verify';
@@ -43,11 +45,14 @@ async function handleVerify(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
   try {
-    // Generate the expected message
-    const message = getVerificationMessage(interaction.user.id, interaction.user.username);
+    // Generate the expected message (same format as web interface)
+    const message = getVerificationMessage();
+    console.log('Expected message:', message);
+    console.log('Verifying signature for wallet:', walletAddress);
 
     // Verify signature
     const isValid = blockchainService.verifySignature(message, signature, walletAddress);
+    console.log('Signature valid:', isValid);
 
     if (!isValid) {
       return interaction.editReply({
