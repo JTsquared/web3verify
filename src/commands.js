@@ -27,6 +27,22 @@ const getMessageCommand = new SlashCommandBuilder()
   .setName('getmessage')
   .setDescription('Get the message to sign with your wallet for verification');
 
+// User command: List wallets
+const walletsCommand = new SlashCommandBuilder()
+  .setName('wallets')
+  .setDescription('List all your linked wallets');
+
+// User command: Remove wallet
+const removeWalletCommand = new SlashCommandBuilder()
+  .setName('removewallet')
+  .setDescription('Remove a linked wallet from your account')
+  .addStringOption(option =>
+    option
+      .setName('wallet')
+      .setDescription('Wallet address to remove (0x...)')
+      .setRequired(true)
+  );
+
 // Admin command: Add role requirement
 const addRoleCommand = new SlashCommandBuilder()
   .setName('addrole')
@@ -102,6 +118,8 @@ module.exports = [
   verifyCommand,
   statusCommand,
   getMessageCommand,
+  walletsCommand,
+  removeWalletCommand,
   addRoleCommand,
   listRolesCommand,
   removeRoleCommand,

@@ -72,6 +72,14 @@ client.on('interactionCreate', async interaction => {
         await handlers.handleStatus(interaction);
         break;
 
+      case 'wallets':
+        await handlers.handleWallets(interaction);
+        break;
+
+      case 'removewallet':
+        await handlers.handleRemoveWallet(interaction);
+        break;
+
       case 'addrole':
         await handlers.handleAddRole(interaction);
         break;

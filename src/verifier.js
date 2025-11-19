@@ -120,16 +120,39 @@ class VerificationService {
 
   /**
    * Check token balance and update role accordingly
+   * Checks ALL wallets - user qualifies if ANY wallet meets requirements
    */
   async checkAndUpdateRole(member, user, roleConfig) {
     const result = { added: false, removed: false };
 
     try {
-      // Check if user has required tokens
-      const balanceCheck = await this.blockchainService.verifyTokenRequirements(
-        user.wallet_address,
-        roleConfig
-      );
+      // Get all wallets for this user
+      const userWallets = db.getWallets(user.discord_id);
+      if (userWallets.length === 0) {
+        console.log(`No wallets found for user ${user.discord_id}`);
+        return result;
+      }
+
+      // Check if ANY wallet has required tokens
+      let meetsRequirements = false;
+      let balanceInfo = null;
+
+      for (const wallet of userWallets) {
+        try {
+          const balanceCheck = await this.blockchainService.verifyTokenRequirements(
+            wallet.wallet_address,
+            roleConfig
+          );
+
+          if (balanceCheck.hasBalance) {
+            meetsRequirements = true;
+            balanceInfo = balanceCheck;
+            break; // Found qualifying wallet, no need to check others
+          }
+        } catch (error) {
+          console.error(`Error checking wallet ${wallet.wallet_address}:`, error.message);
+        }
+      }
 
       const role = member.guild.roles.cache.get(roleConfig.role_id);
       if (!role) {
@@ -140,28 +163,28 @@ class VerificationService {
       const hasRole = member.roles.cache.has(roleConfig.role_id);
 
       // Add role if user has tokens but doesn't have role
-      if (balanceCheck.hasBalance && !hasRole) {
+      if (meetsRequirements && !hasRole) {
         await member.roles.add(role);
         db.logVerification(
           user.discord_id,
           member.guild.id,
           roleConfig.role_id,
           'added',
-          'Periodic verification'
+          'Periodic verification - qualified via one of their wallets'
         );
         console.log(`Added role ${role.name} to ${user.username} (${user.discord_id})`);
         result.added = true;
       }
 
       // Remove role if user doesn't have tokens but has role
-      if (!balanceCheck.hasBalance && hasRole) {
+      if (!meetsRequirements && hasRole) {
         await member.roles.remove(role);
         db.logVerification(
           user.discord_id,
           member.guild.id,
           roleConfig.role_id,
           'removed',
-          `Insufficient balance (has: ${balanceCheck.balance}, needs: ${balanceCheck.required})`
+          `Insufficient balance on all ${userWallets.length} wallet(s)`
         );
         console.log(`Removed role ${role.name} from ${user.username} (${user.discord_id})`);
         result.removed = true;

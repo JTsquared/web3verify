@@ -13,14 +13,26 @@ const db = new Database(path.join(dataDir, 'bot.db'));
 
 // Initialize database tables
 function initDatabase() {
-  // Users table - stores wallet addresses and Discord user info
+  // Users table - stores Discord user info
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       discord_id TEXT PRIMARY KEY,
+      username TEXT,
+      created_at INTEGER NOT NULL,
+      last_checked INTEGER
+    )
+  `);
+
+  // Wallets table - stores multiple wallet addresses per user
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wallets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      discord_id TEXT NOT NULL,
       wallet_address TEXT NOT NULL,
       verified_at INTEGER NOT NULL,
-      last_checked INTEGER,
-      username TEXT
+      is_primary INTEGER DEFAULT 0,
+      FOREIGN KEY (discord_id) REFERENCES users(discord_id),
+      UNIQUE(discord_id, wallet_address)
     )
   `);
 
@@ -56,12 +68,16 @@ function initDatabase() {
 }
 
 // User functions
-function addUser(discordId, walletAddress, username) {
+function ensureUser(discordId, username) {
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO users (discord_id, wallet_address, verified_at, username)
-    VALUES (?, ?, ?, ?)
+    INSERT OR IGNORE INTO users (discord_id, username, created_at)
+    VALUES (?, ?, ?)
   `);
-  return stmt.run(discordId, walletAddress.toLowerCase(), Date.now(), username);
+  stmt.run(discordId, username, Date.now());
+
+  // Update username if changed
+  const updateStmt = db.prepare('UPDATE users SET username = ? WHERE discord_id = ?');
+  updateStmt.run(username, discordId);
 }
 
 function getUser(discordId) {
@@ -70,13 +86,64 @@ function getUser(discordId) {
 }
 
 function getAllUsers() {
-  const stmt = db.prepare('SELECT * FROM users');
+  const stmt = db.prepare('SELECT DISTINCT discord_id, username, created_at, last_checked FROM users');
   return stmt.all();
 }
 
 function updateLastChecked(discordId) {
   const stmt = db.prepare('UPDATE users SET last_checked = ? WHERE discord_id = ?');
   return stmt.run(Date.now(), discordId);
+}
+
+// Wallet functions
+function addWallet(discordId, walletAddress, username, isPrimary = false) {
+  // Ensure user exists
+  ensureUser(discordId, username);
+
+  // Add wallet
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO wallets (discord_id, wallet_address, verified_at, is_primary)
+    VALUES (?, ?, ?, ?)
+  `);
+  const result = stmt.run(discordId, walletAddress.toLowerCase(), Date.now(), isPrimary ? 1 : 0);
+
+  // If this is the first wallet, make it primary
+  const walletCount = getWalletCount(discordId);
+  if (walletCount === 1) {
+    setPrimaryWallet(discordId, walletAddress);
+  }
+
+  return result;
+}
+
+function getWallets(discordId) {
+  const stmt = db.prepare('SELECT * FROM wallets WHERE discord_id = ? ORDER BY is_primary DESC, verified_at ASC');
+  return stmt.all(discordId);
+}
+
+function getWalletCount(discordId) {
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM wallets WHERE discord_id = ?');
+  return stmt.get(discordId).count;
+}
+
+function removeWallet(discordId, walletAddress) {
+  const stmt = db.prepare('DELETE FROM wallets WHERE discord_id = ? AND wallet_address = ?');
+  return stmt.run(discordId, walletAddress.toLowerCase());
+}
+
+function setPrimaryWallet(discordId, walletAddress) {
+  // Remove primary from all wallets
+  const clearStmt = db.prepare('UPDATE wallets SET is_primary = 0 WHERE discord_id = ?');
+  clearStmt.run(discordId);
+
+  // Set new primary
+  const setStmt = db.prepare('UPDATE wallets SET is_primary = 1 WHERE discord_id = ? AND wallet_address = ?');
+  return setStmt.run(discordId, walletAddress.toLowerCase());
+}
+
+function getAllWallets() {
+  const stmt = db.prepare('SELECT * FROM wallets');
+  return stmt.all();
 }
 
 // Role configuration functions
@@ -124,10 +191,16 @@ function getVerificationHistory(discordId, limit = 10) {
 
 module.exports = {
   initDatabase,
-  addUser,
+  ensureUser,
   getUser,
   getAllUsers,
   updateLastChecked,
+  addWallet,
+  getWallets,
+  getWalletCount,
+  removeWallet,
+  setPrimaryWallet,
+  getAllWallets,
   addRoleConfig,
   getRoleConfigs,
   getRoleConfig,

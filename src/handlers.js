@@ -52,15 +52,16 @@ async function handleVerify(interaction) {
       });
     }
 
-    // Save user to database
-    db.addUser(interaction.user.id, walletAddress, interaction.user.username);
+    // Add wallet to database (supports multiple wallets)
+    db.addWallet(interaction.user.id, walletAddress, interaction.user.username);
+    const walletCount = db.getWalletCount(interaction.user.id);
 
     // Check all role requirements for this guild
     const roleConfigs = db.getRoleConfigs(interaction.guild.id);
 
     if (roleConfigs.length === 0) {
       return interaction.editReply({
-        content: 'Wallet verified successfully! However, no token-gated roles are configured yet.'
+        content: `Wallet verified successfully! You now have ${walletCount} wallet${walletCount > 1 ? 's' : ''} linked.\n\nHowever, no token-gated roles are configured yet.`
       });
     }
 
@@ -97,7 +98,8 @@ async function handleVerify(interaction) {
 
     db.updateLastChecked(interaction.user.id);
 
-    let responseMessage = `Wallet \`${walletAddress}\` verified successfully!\n\n`;
+    let responseMessage = `Wallet \`${walletAddress}\` verified successfully!\n`;
+    responseMessage += `You now have **${walletCount}** wallet${walletCount > 1 ? 's' : ''} linked.\n\n`;
 
     if (rolesAdded.length > 0) {
       responseMessage += `**Roles Added:** ${rolesAdded.join(', ')}\n`;
@@ -124,23 +126,30 @@ async function handleVerify(interaction) {
  * Handle /status command
  */
 async function handleStatus(interaction) {
-  const user = db.getUser(interaction.user.id);
+  const wallets = db.getWallets(interaction.user.id);
 
-  if (!user) {
+  if (!wallets || wallets.length === 0) {
     return interaction.reply({
-      content: 'You have not verified your wallet yet. Use `/getmessage` to start the verification process.',
+      content: 'You have not verified any wallets yet. Use `/getmessage` to start the verification process.',
       ephemeral: true
     });
   }
 
+  const user = db.getUser(interaction.user.id);
   const history = db.getVerificationHistory(interaction.user.id, 5);
   const roleConfigs = db.getRoleConfigs(interaction.guild.id);
 
-  let response = `**Your Verification Status**\n`;
-  response += `Wallet: \`${user.wallet_address}\`\n`;
-  response += `Verified: <t:${Math.floor(user.verified_at / 1000)}:R>\n`;
+  let response = `**Your Verification Status**\n\n`;
+  response += `**Linked Wallets (${wallets.length}):**\n`;
+
+  wallets.forEach(wallet => {
+    const isPrimary = wallet.is_primary ? ' ⭐ PRIMARY' : '';
+    const shortAddress = `${wallet.wallet_address.slice(0, 6)}...${wallet.wallet_address.slice(-4)}`;
+    response += `- \`${shortAddress}\`${isPrimary}\n`;
+  });
+
   if (user.last_checked) {
-    response += `Last Checked: <t:${Math.floor(user.last_checked / 1000)}:R>\n`;
+    response += `\nLast Checked: <t:${Math.floor(user.last_checked / 1000)}:R>\n`;
   }
 
   if (roleConfigs.length > 0) {
@@ -297,21 +306,38 @@ async function handleReverify(interaction) {
       const member = await interaction.guild.members.fetch(user.discord_id).catch(() => null);
       if (!member) continue;
 
+      // Get all wallets for this user
+      const userWallets = db.getWallets(user.discord_id);
+      if (userWallets.length === 0) continue;
+
       for (const config of roleConfigs) {
         try {
-          const result = await blockchainService.verifyTokenRequirements(user.wallet_address, config);
           const role = interaction.guild.roles.cache.get(config.role_id);
           if (!role) continue;
 
+          // Check if ANY wallet meets the requirements
+          let meetsRequirements = false;
+          for (const wallet of userWallets) {
+            try {
+              const result = await blockchainService.verifyTokenRequirements(wallet.wallet_address, config);
+              if (result.hasBalance) {
+                meetsRequirements = true;
+                break;
+              }
+            } catch (error) {
+              console.error(`Error checking wallet ${wallet.wallet_address}:`, error);
+            }
+          }
+
           const hasRole = member.roles.cache.has(config.role_id);
 
-          if (result.hasBalance && !hasRole) {
+          if (meetsRequirements && !hasRole) {
             await member.roles.add(role);
             db.logVerification(user.discord_id, interaction.guild.id, config.role_id, 'added', 'Admin re-verification');
             rolesAdded++;
-          } else if (!result.hasBalance && hasRole) {
+          } else if (!meetsRequirements && hasRole) {
             await member.roles.remove(role);
-            db.logVerification(user.discord_id, interaction.guild.id, config.role_id, 'removed', 'Insufficient balance');
+            db.logVerification(user.discord_id, interaction.guild.id, config.role_id, 'removed', 'Insufficient balance on all wallets');
             rolesRemoved++;
           }
         } catch (error) {
@@ -334,10 +360,129 @@ async function handleReverify(interaction) {
   }
 }
 
+/**
+ * Handle /wallets command
+ */
+async function handleWallets(interaction) {
+  const wallets = db.getWallets(interaction.user.id);
+
+  if (!wallets || wallets.length === 0) {
+    return interaction.reply({
+      content: 'You have not linked any wallets yet. Use `/getmessage` and `/verify` to add a wallet.',
+      ephemeral: true
+    });
+  }
+
+  let response = `**Your Linked Wallets (${wallets.length}):**\n\n`;
+
+  wallets.forEach((wallet, index) => {
+    const isPrimary = wallet.is_primary ? ' ⭐ PRIMARY' : '';
+    response += `**${index + 1}.** \`${wallet.wallet_address}\`${isPrimary}\n`;
+    response += `   Verified: <t:${Math.floor(wallet.verified_at / 1000)}:R>\n\n`;
+  });
+
+  response += `\n*Use \`/removewallet\` to unlink a wallet*`;
+
+  await interaction.reply({ content: response, ephemeral: true });
+}
+
+/**
+ * Handle /removewallet command
+ */
+async function handleRemoveWallet(interaction) {
+  const walletAddress = interaction.options.getString('wallet');
+
+  // Validate wallet address format
+  if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+    return interaction.reply({
+      content: 'Invalid wallet address format. Must be a valid Ethereum address (0x...)',
+      ephemeral: true
+    });
+  }
+
+  const wallets = db.getWallets(interaction.user.id);
+  const walletExists = wallets.find(w => w.wallet_address.toLowerCase() === walletAddress.toLowerCase());
+
+  if (!walletExists) {
+    return interaction.reply({
+      content: 'This wallet is not linked to your account.',
+      ephemeral: true
+    });
+  }
+
+  // Prevent removing the last wallet
+  if (wallets.length === 1) {
+    return interaction.reply({
+      content: 'You cannot remove your last wallet. You must have at least one wallet linked.',
+      ephemeral: true
+    });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    db.removeWallet(interaction.user.id, walletAddress);
+
+    // Trigger re-verification to update roles
+    const roleConfigs = db.getRoleConfigs(interaction.guild.id);
+    let rolesUpdated = false;
+
+    if (roleConfigs.length > 0) {
+      const member = interaction.member;
+      const remainingWallets = db.getWallets(interaction.user.id);
+
+      for (const config of roleConfigs) {
+        try {
+          // Check if ANY remaining wallet meets requirements
+          let meetsRequirements = false;
+          for (const wallet of remainingWallets) {
+            const result = await blockchainService.verifyTokenRequirements(wallet.wallet_address, config);
+            if (result.hasBalance) {
+              meetsRequirements = true;
+              break;
+            }
+          }
+
+          const hasRole = member.roles.cache.has(config.role_id);
+
+          // Remove role if no longer qualified
+          if (!meetsRequirements && hasRole) {
+            const role = interaction.guild.roles.cache.get(config.role_id);
+            if (role) {
+              await member.roles.remove(role);
+              db.logVerification(interaction.user.id, interaction.guild.id, config.role_id, 'removed', 'Wallet removed');
+              rolesUpdated = true;
+            }
+          }
+        } catch (error) {
+          console.error(`Error checking role ${config.role_id}:`, error);
+        }
+      }
+    }
+
+    let response = `Wallet \`${walletAddress}\` has been removed from your account.\n`;
+    response += `You now have ${wallets.length - 1} wallet${wallets.length - 1 > 1 ? 's' : ''} linked.`;
+
+    if (rolesUpdated) {
+      response += `\n\nSome of your roles have been updated based on your remaining wallets.`;
+    }
+
+    await interaction.editReply({ content: response });
+
+  } catch (error) {
+    console.error('Error removing wallet:', error);
+    await interaction.editReply({
+      content: 'An error occurred while removing the wallet. Please try again later.'
+    });
+  }
+}
+
 module.exports = {
   handleGetMessage,
   handleVerify,
   handleStatus,
+  handleWallets,
+  handleRemoveWallet,
   handleAddRole,
   handleListRoles,
   handleRemoveRole,
