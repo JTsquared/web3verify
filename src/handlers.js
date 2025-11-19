@@ -16,8 +16,11 @@ function getVerificationMessage(discordId, username) {
 async function handleGetMessage(interaction) {
   const message = getVerificationMessage(interaction.user.id, interaction.user.username);
 
+  // Get the web verification URL (from environment or construct from deployment)
+  const webUrl = process.env.WEB_URL || 'http://localhost:3000/verify';
+
   await interaction.reply({
-    content: `**Please sign this message with your wallet:**\n\`\`\`\n${message}\n\`\`\`\n\n**How to sign:**\n1. Go to https://www.myetherwallet.com/wallet/sign\n2. Connect your wallet\n3. Paste the message above\n4. Sign it and copy the signature\n5. Use \`/verify\` with your wallet address and signature`,
+    content: `**Option 1: Use Web Interface (Easiest)** ✨\n🔗 ${webUrl}\nClick the link above to verify with MetaMask or any wallet!\n\n**Option 2: Manual Verification**\nSign this message with your wallet:\n\`\`\`\n${message}\n\`\`\`\n\n**How to sign manually:**\n• **MetaMask**: Open browser console (F12), use \`ethereum.request()\`\n• **MyEtherWallet**: https://www.myetherwallet.com/wallet/sign\n• **Any wallet**: Sign the message above\n\nThen use: \`/verify wallet:0xYour... signature:0xYour...\``,
     ephemeral: true
   });
 }

@@ -140,11 +140,15 @@ process.on('unhandledRejection', error => {
   console.error('Unhandled promise rejection:', error);
 });
 
-// Create a simple Express server for health checks (required by some hosting platforms)
+// Create Express server for health checks and web interface
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, '../public')));
+
+// API endpoint for bot status
+app.get('/api/status', (req, res) => {
   res.json({
     status: 'online',
     bot: client.user?.tag || 'Not connected',
@@ -153,12 +157,24 @@ app.get('/', (req, res) => {
   });
 });
 
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Verification page (serves the HTML)
+app.get('/verify', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+// Root redirects to verification page
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
 app.listen(PORT, () => {
-  console.log(`Health check server running on port ${PORT}`);
+  console.log(`Web server running on port ${PORT}`);
+  console.log(`Verification page: http://localhost:${PORT}/verify`);
 });
 
 // Login to Discord

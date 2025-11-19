@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web3Verify - Wallet Verification</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      color: #333;
+      font-size: 28px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: #666;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .card {
+      background: #f7f9fc;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .step-number {
+      background: #667eea;
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+
+    .step-text {
+      color: #333;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 15px;
+    }
+
+    button:hover:not(:disabled) {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .success {
+      background: #10b981;
+    }
+
+    .success:hover:not(:disabled) {
+      background: #059669;
+    }
+
+    .wallet-info {
+      background: white;
+      border: 2px solid #667eea;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .wallet-info.active {
+      display: block;
+    }
+
+    .wallet-address {
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+
+    .result {
+      background: #ecfdf5;
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .result.active {
+      display: block;
+    }
+
+    .result h3 {
+      color: #10b981;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .copy-section {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+
+    .copy-section label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    .copy-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #5568d3;
+    }
+
+    .copy-btn.copied {
+      background: #10b981;
+    }
+
+    .error {
+      background: #fee;
+      border: 2px solid #f44;
+      color: #c00;
+      padding: 15px;
+      border-radius: 12px;
+      margin-top: 15px;
+      display: none;
+    }
+
+    .error.active {
+      display: block;
+    }
+
+    .discord-command {
+      background: #5865f2;
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 13px;
+      margin-top: 15px;
+      word-break: break-all;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #666;
+      font-size: 12px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>🔐 Web3Verify</h1>
+      <p class="subtitle">Verify your wallet for token-gated Discord access</p>
+    </div>
+
+    <div class="card">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-text">Connect your Avalanche C-Chain wallet</div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-text">Sign the verification message</div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-text">Use the signature in Discord with /verify</div>
+      </div>
+    </div>
+
+    <div class="wallet-info" id="walletInfo">
+      <div class="wallet-address" id="walletAddress"></div>
+      <small style="color: #666;">✅ Wallet connected</small>
+    </div>
+
+    <button id="connectBtn" onclick="connectWallet()">
+      Connect Wallet
+    </button>
+
+    <button id="signBtn" onclick="signMessage()" style="display: none;" disabled>
+      Sign Verification Message
+    </button>
+
+    <div class="error" id="error"></div>
+
+    <div class="result" id="result">
+      <h3>✅ Signature Generated!</h3>
+
+      <div class="copy-section">
+        <label>Your Wallet Address:</label>
+        <input type="text" class="copy-input" id="resultWallet" readonly>
+        <button class="copy-btn" onclick="copyToClipboard('resultWallet', this)">Copy</button>
+      </div>
+
+      <div class="copy-section">
+        <label>Your Signature:</label>
+        <input type="text" class="copy-input" id="resultSignature" readonly>
+        <button class="copy-btn" onclick="copyToClipboard('resultSignature', this)">Copy</button>
+      </div>
+
+      <div class="discord-command">
+        <strong>Next step in Discord:</strong><br>
+        /verify wallet:[paste address] signature:[paste signature]
+      </div>
+    </div>
+
+    <div class="footer">
+      Supports MetaMask, Coinbase Wallet, WalletConnect, and more
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
+  <script>
+    let provider;
+    let signer;
+    let userAddress;
+    let discordId = 'DISCORD_USER_ID'; // This would come from URL params or session
+
+    async function connectWallet() {
+      const connectBtn = document.getElementById('connectBtn');
+      const signBtn = document.getElementById('signBtn');
+      const walletInfo = document.getElementById('walletInfo');
+      const walletAddress = document.getElementById('walletAddress');
+      const error = document.getElementById('error');
+
+      try {
+        error.classList.remove('active');
+
+        // Check if wallet is available
+        if (typeof window.ethereum === 'undefined') {
+          showError('No wallet detected. Please install MetaMask or another Web3 wallet.');
+          return;
+        }
+
+        connectBtn.innerHTML = '<span class="loading"></span>Connecting...';
+        connectBtn.disabled = true;
+
+        // Request account access
+        provider = new ethers.BrowserProvider(window.ethereum);
+
+        const accounts = await provider.send("eth_requestAccounts", []);
+        userAddress = accounts[0];
+
+        // Get signer
+        signer = await provider.getSigner();
+
+        // Check if on Avalanche C-Chain (optional)
+        const network = await provider.getNetwork();
+        console.log('Connected to network:', network.chainId);
+
+        // Update UI
+        walletAddress.textContent = `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+        walletInfo.classList.add('active');
+        connectBtn.style.display = 'none';
+        signBtn.style.display = 'block';
+        signBtn.disabled = false;
+
+      } catch (err) {
+        console.error('Connection error:', err);
+        showError(err.message || 'Failed to connect wallet');
+        connectBtn.innerHTML = 'Connect Wallet';
+        connectBtn.disabled = false;
+      }
+    }
+
+    async function signMessage() {
+      const signBtn = document.getElementById('signBtn');
+      const result = document.getElementById('result');
+      const error = document.getElementById('error');
+
+      try {
+        error.classList.remove('active');
+        signBtn.innerHTML = '<span class="loading"></span>Signing...';
+        signBtn.disabled = true;
+
+        // Generate message (same format as bot)
+        const timestamp = Date.now();
+        const message = `I am verifying my wallet for Web3Verify.\n\nWallet: ${userAddress}\nTimestamp: ${timestamp}`;
+
+        console.log('Message to sign:', message);
+
+        // Request signature
+        const signature = await signer.signMessage(message);
+
+        console.log('Signature:', signature);
+
+        // Show results
+        document.getElementById('resultWallet').value = userAddress;
+        document.getElementById('resultSignature').value = signature;
+        result.classList.add('active');
+
+        signBtn.innerHTML = '✅ Signed Successfully';
+        signBtn.classList.add('success');
+
+      } catch (err) {
+        console.error('Signing error:', err);
+        showError(err.message || 'Failed to sign message');
+        signBtn.innerHTML = 'Sign Verification Message';
+        signBtn.disabled = false;
+      }
+    }
+
+    function copyToClipboard(elementId, button) {
+      const input = document.getElementById(elementId);
+      input.select();
+      input.setSelectionRange(0, 99999); // For mobile
+
+      navigator.clipboard.writeText(input.value).then(() => {
+        const originalText = button.textContent;
+        button.textContent = '✓ Copied!';
+        button.classList.add('copied');
+
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.classList.remove('copied');
+        }, 2000);
+      }).catch(err => {
+        console.error('Copy failed:', err);
+        alert('Failed to copy. Please copy manually.');
+      });
+    }
+
+    function showError(message) {
+      const error = document.getElementById('error');
+      error.textContent = message;
+      error.classList.add('active');
+    }
+
+    // Detect account changes
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length === 0) {
+          location.reload();
+        } else {
+          location.reload();
+        }
+      });
+
+      window.ethereum.on('chainChanged', () => {
+        location.reload();
+      });
+    }
+  </script>
+</body>
+</html>
