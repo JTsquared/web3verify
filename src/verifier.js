@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const db = require('./database');
+const db = require('./database-mongo');
 const BlockchainService = require('./blockchain');
 
 class VerificationService {

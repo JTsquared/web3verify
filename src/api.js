@@ -1,4 +1,4 @@
-const db = require('./database');
+const db = require('./database-mongo');
 const BlockchainService = require('./blockchain');
 
 const blockchainService = new BlockchainService(process.env.AVALANCHE_RPC_URL);
