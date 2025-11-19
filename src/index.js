@@ -2,10 +2,10 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes } = require('discord.js');
 const express = require('express');
 const session = require('express-session');
-const fs = require('fs');
+const MongoStore = require('connect-mongo');
 const path = require('path');
 
-const db = require('./database');
+const db = require('./database-mongo');
 const commands = require('./commands');
 const handlers = require('./handlers');
 const VerificationService = require('./verifier');
@@ -13,7 +13,7 @@ const oauth = require('./oauth');
 const api = require('./api');
 
 // Validate required environment variables
-const requiredEnvVars = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'AVALANCHE_RPC_URL'];
+const requiredEnvVars = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'AVALANCHE_RPC_URL', 'MONGODB_URI'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -22,12 +22,11 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Initialize database
-const dataDir = path.join(__dirname, '../data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-db.initDatabase();
+// Initialize MongoDB database
+db.initDatabase().catch(error => {
+  console.error('Failed to initialize database:', error);
+  process.exit(1);
+});
 
 // Create Discord client
 const client = new Client({
@@ -135,6 +134,9 @@ client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
   console.log(`Bot is in ${client.guilds.cache.size} servers`);
 
+  // Make Discord client available to Express app (for API role assignment)
+  app.locals.discordClient = client;
+
   // Start verification service
   const verificationInterval = parseInt(process.env.VERIFICATION_INTERVAL_HOURS) || 24;
   const verifier = new VerificationService(client, process.env.AVALANCHE_RPC_URL);
@@ -163,11 +165,15 @@ app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session middleware for OAuth
+// Session middleware for OAuth (using MongoDB for persistence)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'web3verify-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    touchAfter: 24 * 3600 // Lazy session update (seconds)
+  }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,

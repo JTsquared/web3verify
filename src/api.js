@@ -12,7 +12,7 @@ function getVerificationMessage() {
 
 /**
  * API endpoint to verify wallet from web interface
- * Auto-links wallet to Discord user via OAuth session
+ * Auto-links wallet to Discord user via OAuth session AND assigns roles
  */
 async function verifyWallet(req, res) {
   // Check if user is authenticated via Discord OAuth
@@ -23,7 +23,7 @@ async function verifyWallet(req, res) {
     });
   }
 
-  const { walletAddress, signature } = req.body;
+  const { walletAddress, signature, client } = req.body;
 
   // Validate inputs
   if (!walletAddress || !signature) {
@@ -62,7 +62,63 @@ async function verifyWallet(req, res) {
 
     console.log(`Wallet ${walletAddress} verified for Discord user ${discordUser.username} (${discordUser.id})`);
 
-    // Return success
+    // Check and assign roles across all guilds (if client is provided)
+    const rolesAdded = [];
+    const rolesFailed = [];
+    const guildsChecked = [];
+
+    if (req.app.locals.discordClient) {
+      const discordClient = req.app.locals.discordClient;
+
+      // Check all guilds the bot is in
+      for (const [guildId, guild] of discordClient.guilds.cache) {
+        try {
+          // Check if user is in this guild
+          const member = await guild.members.fetch(discordUser.id).catch(() => null);
+          if (!member) continue;
+
+          guildsChecked.push(guild.name);
+
+          // Get role configs for this guild
+          const roleConfigs = db.getRoleConfigs(guildId);
+          if (roleConfigs.length === 0) continue;
+
+          // Check each role requirement
+          for (const config of roleConfigs) {
+            try {
+              const result = await blockchainService.verifyTokenRequirements(walletAddress, config);
+
+              if (result.hasBalance) {
+                const role = guild.roles.cache.get(config.role_id);
+                if (role && !member.roles.cache.has(config.role_id)) {
+                  await member.roles.add(role);
+                  rolesAdded.push({ guild: guild.name, role: role.name });
+                  db.logVerification(discordUser.id, guildId, config.role_id, 'added', 'Web verification');
+                  console.log(`Added role ${role.name} in ${guild.name}`);
+                }
+              } else {
+                const role = guild.roles.cache.get(config.role_id);
+                if (role) {
+                  rolesFailed.push({
+                    guild: guild.name,
+                    role: role.name,
+                    reason: `Insufficient balance (has: ${result.balance}, needs: ${result.required})`
+                  });
+                }
+              }
+            } catch (error) {
+              console.error(`Error checking role ${config.role_id}:`, error);
+            }
+          }
+
+          db.updateLastChecked(discordUser.id);
+        } catch (error) {
+          console.error(`Error processing guild ${guildId}:`, error);
+        }
+      }
+    }
+
+    // Return success with role information
     res.json({
       success: true,
       message: 'Wallet verified successfully!',
@@ -72,7 +128,10 @@ async function verifyWallet(req, res) {
         discordUser: {
           id: discordUser.id,
           username: discordUser.username
-        }
+        },
+        guildsChecked: guildsChecked.length,
+        rolesAdded,
+        rolesFailed
       }
     });
 

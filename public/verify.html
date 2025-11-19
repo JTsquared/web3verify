@@ -413,7 +413,26 @@
           signBtn.classList.add('hidden');
 
           const resultMessage = document.getElementById('resultMessage');
-          resultMessage.textContent = `Your wallet ${userAddress.slice(0,6)}...${userAddress.slice(-4)} is now linked to your Discord account! You now have ${data.data.walletCount} wallet(s) linked.`;
+          let message = `Your wallet ${userAddress.slice(0,6)}...${userAddress.slice(-4)} is now linked!\n\n`;
+
+          if (data.data.rolesAdded && data.data.rolesAdded.length > 0) {
+            message += `✅ Roles Added:\n`;
+            data.data.rolesAdded.forEach(r => {
+              message += `• ${r.role} in ${r.guild}\n`;
+            });
+          } else {
+            message += `Checked ${data.data.guildsChecked} server(s), but you don't meet the requirements for any token-gated roles yet.\n`;
+          }
+
+          if (data.data.rolesFailed && data.data.rolesFailed.length > 0) {
+            message += `\n❌ Requirements Not Met:\n`;
+            data.data.rolesFailed.forEach(r => {
+              message += `• ${r.role}: ${r.reason}\n`;
+            });
+          }
+
+          resultMessage.style.whiteSpace = 'pre-wrap';
+          resultMessage.textContent = message;
 
           result.classList.add('active');
         } else {
