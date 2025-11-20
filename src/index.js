@@ -225,7 +225,8 @@ async function start() {
     // 2. Start Express server
     app.listen(PORT, () => {
       console.log(`✓ Web server running on port ${PORT}`);
-      console.log(`  Verification page: http://localhost:${PORT}/verify`);
+      const verifyUrl = process.env.WEB_URL || `http://localhost:${PORT}/verify`;
+      console.log(`  Verification page: ${verifyUrl}`);
     });
 
     // 3. Register Discord commands
