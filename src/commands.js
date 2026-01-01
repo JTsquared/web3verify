@@ -94,7 +94,7 @@ const listRolesCommand = new SlashCommandBuilder()
 const removeRoleCommand = new SlashCommandBuilder()
   .setName('removerole')
   .setDescription('Remove a token requirement configuration (Admin only)')
-  .addIntegerOption(option =>
+  .addStringOption(option =>
     option
       .setName('id')
       .setDescription('The configuration ID to remove (use /listroles to see IDs)')

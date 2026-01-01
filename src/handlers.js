@@ -243,7 +243,7 @@ async function handleListRoles(interaction) {
 
   roleConfigs.forEach(config => {
     const role = interaction.guild.roles.cache.get(config.role_id);
-    response += `**ID:** ${config.id}\n`;
+    response += `**ID:** ${config._id}\n`;
     response += `**Role:** ${role?.name || 'Deleted Role'}\n`;
     response += `**Type:** ${config.token_type}\n`;
     response += `**Contract:** \`${config.contract_address}\`\n`;
@@ -261,7 +261,7 @@ async function handleListRoles(interaction) {
  * Handle /removerole command (Admin only)
  */
 async function handleRemoveRole(interaction) {
-  const configId = interaction.options.getInteger('id');
+  const configId = interaction.options.getString('id');
 
   try {
     db.deleteRoleConfig(configId);
