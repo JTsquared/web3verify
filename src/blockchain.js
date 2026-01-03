@@ -94,9 +94,9 @@ class BlockchainService {
   }
 
   /**
-   * Check staked token balance
+   * Check staked token balance (raw balance only)
    */
-  async checkStakedBalance(walletAddress, stakingContractAddress, minBalance) {
+  async getStakedBalance(walletAddress, stakingContractAddress) {
     try {
       const contract = new ethers.Contract(stakingContractAddress, STAKING_ABI, this.provider);
 
@@ -108,15 +108,45 @@ class BlockchainService {
         balance = await contract.balanceOf(walletAddress);
       }
 
-      const minBalanceBN = ethers.parseUnits(minBalance.toString(), 18);
+      return balance;
+    } catch (error) {
+      console.error(`Error checking staked balance: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Check ERC20 balance including staked tokens
+   * Adds wallet balance + staked balance together
+   */
+  async checkERC20BalanceWithStaking(walletAddress, contractAddress, stakingContractAddress, minBalance) {
+    try {
+      const contract = new ethers.Contract(contractAddress, ERC20_ABI, this.provider);
+
+      // Get wallet balance
+      const walletBalance = await contract.balanceOf(walletAddress);
+
+      // Get staked balance
+      const stakedBalance = await this.getStakedBalance(walletAddress, stakingContractAddress);
+
+      // Add them together
+      const totalBalance = walletBalance + stakedBalance;
+
+      const decimals = await contract.decimals();
+      const formattedBalance = ethers.formatUnits(totalBalance, decimals);
+      const formattedWalletBalance = ethers.formatUnits(walletBalance, decimals);
+      const formattedStakedBalance = ethers.formatUnits(stakedBalance, decimals);
+      const minBalanceFormatted = ethers.parseUnits(minBalance.toString(), decimals);
+
+      console.log(`Wallet balance: ${formattedWalletBalance}, Staked balance: ${formattedStakedBalance}, Total: ${formattedBalance}, Required: ${minBalance}`);
 
       return {
-        hasBalance: balance >= minBalanceBN,
-        balance: ethers.formatUnits(balance, 18),
+        hasBalance: totalBalance >= minBalanceFormatted,
+        balance: formattedBalance,
         required: minBalance
       };
     } catch (error) {
-      console.error(`Error checking staked balance: ${error.message}`);
+      console.error(`Error checking ERC20 balance with staking: ${error.message}`);
       throw error;
     }
   }
@@ -126,23 +156,25 @@ class BlockchainService {
    */
   async verifyTokenRequirements(walletAddress, roleConfig) {
     try {
-      // If there's a staking contract, check that instead
-      if (roleConfig.staking_contract) {
-        return await this.checkStakedBalance(
-          walletAddress,
-          roleConfig.staking_contract,
-          roleConfig.min_balance
-        );
-      }
-
-      // Otherwise check the token contract directly
+      // Check based on token type
       switch (roleConfig.token_type) {
         case 'ERC20':
-          return await this.checkERC20Balance(
-            walletAddress,
-            roleConfig.contract_address,
-            roleConfig.min_balance
-          );
+          // If there's a staking contract, check both wallet AND staking balance
+          if (roleConfig.staking_contract) {
+            return await this.checkERC20BalanceWithStaking(
+              walletAddress,
+              roleConfig.contract_address,
+              roleConfig.staking_contract,
+              roleConfig.min_balance
+            );
+          } else {
+            // No staking, just check wallet
+            return await this.checkERC20Balance(
+              walletAddress,
+              roleConfig.contract_address,
+              roleConfig.min_balance
+            );
+          }
 
         case 'ERC721':
           return await this.checkERC721Balance(
