@@ -19,7 +19,8 @@ const ERC1155_ABI = [
 // Common staking contract ABI
 const STAKING_ABI = [
   'function balanceOf(address account) view returns (uint256)',
-  'function stakedBalanceOf(address account) view returns (uint256)'
+  'function stakedBalanceOf(address account) view returns (uint256)',
+  'function userInfo(address account) view returns (uint256 amount, uint256 end, uint256 points, uint256 originalDuration, uint256 lastUpdated)'
 ];
 
 class BlockchainService {
@@ -100,15 +101,33 @@ class BlockchainService {
     try {
       const contract = new ethers.Contract(stakingContractAddress, STAKING_ABI, this.provider);
 
-      // Try stakedBalanceOf first, fall back to balanceOf
+      // Try different staking contract methods in order of preference
       let balance;
+
+      // 1. Try userInfo() first (returns struct with amount field)
       try {
-        balance = await contract.stakedBalanceOf(walletAddress);
-      } catch {
-        balance = await contract.balanceOf(walletAddress);
+        const userInfo = await contract.userInfo(walletAddress);
+        balance = userInfo[0]; // amount is the first field in the struct
+        console.log(`Got staked balance from userInfo(): ${ethers.formatUnits(balance, 18)}`);
+        return balance;
+      } catch (userInfoError) {
+        console.log(`userInfo() failed, trying stakedBalanceOf(): ${userInfoError.message}`);
       }
 
+      // 2. Try stakedBalanceOf()
+      try {
+        balance = await contract.stakedBalanceOf(walletAddress);
+        console.log(`Got staked balance from stakedBalanceOf(): ${ethers.formatUnits(balance, 18)}`);
+        return balance;
+      } catch (stakedBalanceError) {
+        console.log(`stakedBalanceOf() failed, trying balanceOf(): ${stakedBalanceError.message}`);
+      }
+
+      // 3. Fall back to balanceOf()
+      balance = await contract.balanceOf(walletAddress);
+      console.log(`Got staked balance from balanceOf(): ${ethers.formatUnits(balance, 18)}`);
       return balance;
+
     } catch (error) {
       console.error(`Error checking staked balance: ${error.message}`);
       throw error;
