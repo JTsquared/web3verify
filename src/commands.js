@@ -114,12 +114,24 @@ const reverifyCommand = new SlashCommandBuilder()
   )
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
+// User command: Update Blaze username
+const blazeUsernameCommand = new SlashCommandBuilder()
+  .setName('blazeuser')
+  .setDescription('Set or update your Blaze username for NFT-gated games')
+  .addStringOption(option =>
+    option
+      .setName('username')
+      .setDescription('Your Blaze username')
+      .setRequired(true)
+  );
+
 module.exports = [
   linkWalletCommand,
   statusCommand,
   walletsCommand,
   removeWalletCommand,
   verifyCommand, // Keep for manual verification (advanced users)
+  blazeUsernameCommand,
   addRoleCommand,
   listRolesCommand,
   removeRoleCommand,

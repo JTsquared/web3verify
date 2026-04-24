@@ -482,6 +482,72 @@ async function handleRemoveWallet(interaction) {
   }
 }
 
+/**
+ * Handle /blazeuser command - set or update Blaze username
+ */
+async function handleBlazeUser(interaction) {
+  const newBlazeUsername = interaction.options.getString('username');
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    // Check if user has a verified wallet
+    const wallets = await db.getWallets(interaction.user.id);
+    if (!wallets || wallets.length === 0) {
+      return interaction.editReply({
+        content: 'You need to verify a wallet first. Use `/linkwallet` to get started.'
+      });
+    }
+
+    const primaryWallet = wallets.find(w => w.is_primary) || wallets[0];
+
+    // Check if they already have a Blaze registration
+    const existing = await db.getBlazeRegistration(newBlazeUsername);
+
+    // If the new username is already taken by someone else
+    if (existing && existing.discord_id !== interaction.user.id) {
+      return interaction.editReply({
+        content: `The Blaze username "${newBlazeUsername}" is already registered to another user.`
+      });
+    }
+
+    // Check if this Discord user already has a different Blaze username registered
+    const allRegs = await db.getAllBlazeRegistrations();
+    const currentReg = allRegs.find(r => r.discord_id === interaction.user.id);
+
+    if (currentReg) {
+      // Update existing username
+      const result = await db.updateBlazeUsername(currentReg.blaze_username, newBlazeUsername);
+      if (!result) {
+        return interaction.editReply({
+          content: `Could not update to "${newBlazeUsername}". The username may already be taken.`
+        });
+      }
+      await interaction.editReply({
+        content: `Your Blaze username has been updated from "${currentReg.blaze_username}" to "${newBlazeUsername}".`
+      });
+    } else {
+      // New registration via Discord
+      await db.registerBlazeFromDiscord(newBlazeUsername, primaryWallet.wallet_address, interaction.user.id);
+
+      // Check NFT status
+      const blazeApi = require('./blaze-api');
+      const holdsNft = await blazeApi.checkWalletForObeezNft(primaryWallet.wallet_address);
+      await db.updateBlazeNftStatus(newBlazeUsername, holdsNft);
+
+      const nftStatus = holdsNft ? 'Obeez NFT detected!' : 'No Obeez NFT found in your primary wallet.';
+      await interaction.editReply({
+        content: `Blaze username "${newBlazeUsername}" linked to your wallet \`${primaryWallet.wallet_address.slice(0,6)}...${primaryWallet.wallet_address.slice(-4)}\`. ${nftStatus}`
+      });
+    }
+  } catch (error) {
+    console.error('Error handling blazeuser command:', error);
+    await interaction.editReply({
+      content: 'An error occurred. Please try again later.'
+    });
+  }
+}
+
 module.exports = {
   handleLinkWallet,
   handleVerify,
@@ -491,5 +557,6 @@ module.exports = {
   handleAddRole,
   handleListRoles,
   handleRemoveRole,
-  handleReverify
+  handleReverify,
+  handleBlazeUser
 };

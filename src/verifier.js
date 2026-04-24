@@ -72,6 +72,9 @@ class VerificationService {
       console.log(`  Roles removed: ${totalRolesRemoved}`);
       console.log(`  Errors: ${errors}`);
 
+      // Also update NFT status for Blaze registrations
+      await this.updateBlazeNftStatuses();
+
     } catch (error) {
       console.error('Error during verification run:', error);
     } finally {
@@ -195,6 +198,44 @@ class VerificationService {
     }
 
     return result;
+  }
+
+  /**
+   * Update NFT holding status for all Blaze registrations
+   */
+  async updateBlazeNftStatuses() {
+    try {
+      const blazeApi = require('./blaze-api');
+      const registrations = await db.getAllBlazeRegistrations();
+
+      if (registrations.length === 0) return;
+
+      console.log(`Checking NFT status for ${registrations.length} Blaze registration(s)...`);
+
+      let updated = 0;
+      let errors = 0;
+
+      for (const reg of registrations) {
+        try {
+          const holdsNft = await blazeApi.checkWalletForObeezNft(reg.wallet_address);
+          await db.updateBlazeNftStatus(reg.blaze_username, holdsNft);
+          updated++;
+
+          if (holdsNft !== reg.holds_nft) {
+            console.log(`Blaze user ${reg.blaze_username}: NFT status changed to ${holdsNft}`);
+          }
+        } catch (error) {
+          console.error(`Error checking NFT for Blaze user ${reg.blaze_username}:`, error.message);
+          errors++;
+        }
+
+        await this.sleep(500);
+      }
+
+      console.log(`Blaze NFT check complete: ${updated} updated, ${errors} errors`);
+    } catch (error) {
+      console.error('Error updating Blaze NFT statuses:', error);
+    }
   }
 
   /**

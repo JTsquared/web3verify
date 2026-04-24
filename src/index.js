@@ -11,6 +11,7 @@ const handlers = require('./handlers');
 const VerificationService = require('./verifier');
 const oauth = require('./oauth');
 const api = require('./api');
+const blazeApi = require('./blaze-api');
 
 // Validate required environment variables
 const requiredEnvVars = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'AVALANCHE_RPC_URL', 'MONGODB_URI'];
@@ -93,6 +94,10 @@ client.on('interactionCreate', async interaction => {
 
       case 'reverify':
         await handlers.handleReverify(interaction);
+        break;
+
+      case 'blazeuser':
+        await handlers.handleBlazeUser(interaction);
         break;
 
       default:
@@ -189,6 +194,15 @@ app.post('/auth/logout', oauth.handleLogout);
 app.post('/api/verify', api.verifyWallet);
 app.get('/api/user/status', api.getStatus);
 
+// Blaze registration API routes
+app.post('/api/blaze/register', blazeApi.createRegistration);
+app.post('/api/blaze/verify-wallet', blazeApi.verifyBlazeWallet);
+app.post('/api/blaze/confirm', blazeApi.confirmRegistration);
+app.get('/api/blaze/check', blazeApi.checkNftStatus);
+app.get('/api/blaze/token-check', blazeApi.checkToken);
+app.put('/api/blaze/username', blazeApi.updateUsername);
+app.post('/api/blaze/register-from-discord', blazeApi.registerFromDiscord);
+
 // Bot status endpoint
 app.get('/api/status', (req, res) => {
   res.json({
@@ -207,6 +221,11 @@ app.get('/health', (req, res) => {
 // Verification page (new OAuth-enabled version)
 app.get('/verify', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/verify.html'));
+});
+
+// Blaze verification page
+app.get('/blaze-verify', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/blaze-verify.html'));
 });
 
 // Root redirects to verification page

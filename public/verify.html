@@ -293,7 +293,21 @@
     <div class="result" id="result">
       <h3>✅ Success!</h3>
       <p id="resultMessage"></p>
-      <button onclick="location.reload()">Verify Another Wallet</button>
+
+      <div id="blazeSection" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #d1fae5;">
+        <p style="color: #333; font-size: 14px; margin-bottom: 10px; font-weight: 600;">Do you also use Blaze? Link your username to verify for Blaze games:</p>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <input type="text" id="blazeUsernameInput" placeholder="Your Blaze username"
+            style="flex: 1; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none;"
+            onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#d1d5db'">
+          <button id="blazeLinkBtn" onclick="linkBlazeUsername()" style="width: auto; padding: 12px 20px; margin-bottom: 0; font-size: 14px;">
+            Link
+          </button>
+        </div>
+        <p id="blazeResult" style="font-size: 13px; display: none;"></p>
+      </div>
+
+      <button onclick="location.reload()" style="margin-top: 15px;">Verify Another Wallet</button>
     </div>
   </div>
 
@@ -453,6 +467,58 @@
       const error = document.getElementById('error');
       error.textContent = message;
       error.classList.add('active');
+    }
+
+    async function linkBlazeUsername() {
+      const input = document.getElementById('blazeUsernameInput');
+      const btn = document.getElementById('blazeLinkBtn');
+      const resultEl = document.getElementById('blazeResult');
+      const blazeUsername = input.value.trim();
+
+      if (!blazeUsername) {
+        resultEl.textContent = 'Please enter your Blaze username.';
+        resultEl.style.color = '#c00';
+        resultEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      try {
+        const response = await fetch('/api/blaze/register-from-discord', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blazeUsername: blazeUsername,
+            walletAddress: userAddress,
+            discordId: discordUser.id
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          resultEl.style.color = '#10b981';
+          resultEl.textContent = `Blaze username "${data.blazeUsername}" linked! ` +
+            (data.holdsNft ? 'Obeez NFT detected.' : 'No Obeez NFT found in this wallet.');
+          resultEl.style.display = 'block';
+          input.disabled = true;
+          btn.textContent = 'Linked';
+        } else {
+          resultEl.style.color = '#c00';
+          resultEl.textContent = data.error || 'Failed to link Blaze username.';
+          resultEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Link';
+        }
+      } catch (err) {
+        resultEl.style.color = '#c00';
+        resultEl.textContent = 'Network error. Please try again.';
+        resultEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Link';
+      }
     }
 
     // Check auth on page load
