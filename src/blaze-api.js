@@ -24,10 +24,8 @@ async function createRegistration(req, res) {
 
   try {
     const token = await db.createBlazeRegistrationToken(blazeUsername);
-    const rawWebUrl = process.env.WEB_URL || `http://localhost:${process.env.PORT || 3000}`;
-    // Strip any path (e.g. /verify) to get the base URL
-    const baseUrl = rawWebUrl.replace(/\/[^/]*$/, '').replace(/\/$/, '') || rawWebUrl;
-    const verifyUrl = `${baseUrl}/blaze-verify?token=${token}`;
+    const baseUrl = process.env.WEB_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const verifyUrl = `${baseUrl}/verify/blaze?token=${token}`;
 
     res.json({
       success: true,

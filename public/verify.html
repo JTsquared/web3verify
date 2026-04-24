@@ -318,10 +318,18 @@
     let signer;
     let userAddress;
 
+    // Derive the base path from the current page URL
+    // e.g., /obeez/verify/discord -> /obeez, or /verify/discord -> ""
+    const basePath = window.location.pathname.replace(/\/verify\/discord.*$/, '');
+
+    function apiUrl(path) {
+      return basePath + path;
+    }
+
     // Check if user is already logged in
     async function checkAuth() {
       try {
-        const response = await fetch('/auth/user');
+        const response = await fetch(apiUrl('/auth/user'));
         if (response.ok) {
           discordUser = await response.json();
           showDiscordUser();
@@ -353,7 +361,7 @@
     }
 
     function loginWithDiscord() {
-      window.location.href = '/auth/discord';
+      window.location.href = apiUrl('/auth/discord');
     }
 
     async function connectWallet() {
@@ -409,7 +417,7 @@
         signBtn.innerHTML = '<span class="loading"></span>Verifying...';
 
         // Submit to API
-        const response = await fetch('/api/verify', {
+        const response = await fetch(apiUrl('/api/verify'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -486,7 +494,7 @@
       btn.textContent = '...';
 
       try {
-        const response = await fetch('/api/blaze/register-from-discord', {
+        const response = await fetch(apiUrl('/api/blaze/register-from-discord'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

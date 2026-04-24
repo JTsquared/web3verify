@@ -69,7 +69,7 @@ async function handleOAuthCallback(req, res) {
         return res.status(500).send('Session error. Please try again.');
       }
       // Redirect to verification page
-      res.redirect('/verify');
+      res.redirect('/verify/discord');
     });
 
   } catch (error) {

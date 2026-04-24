@@ -310,6 +310,14 @@
     let userAddress;
     let registrationToken;
 
+    // Derive the base path from the current page URL
+    // e.g., /obeez/verify/blaze -> /obeez, or /verify/blaze -> ""
+    const basePath = window.location.pathname.replace(/\/verify\/blaze.*$/, '');
+
+    function apiUrl(path) {
+      return basePath + path;
+    }
+
     // Get token from URL
     async function init() {
       const params = new URLSearchParams(window.location.search);
@@ -320,24 +328,9 @@
         return;
       }
 
-      // Validate the token with the server
-      try {
-        const response = await fetch(`/api/blaze/verify-wallet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: registrationToken, walletAddress: '0x0000000000000000000000000000000000000000', signature: 'check' })
-        });
-
-        // We expect this to fail with a specific error - we just need to know the token exists
-        // A better approach: add a token validation endpoint
-        // For now, we'll use a dedicated check
-      } catch (err) {
-        // Network error
-      }
-
       // Validate token by fetching pending registration info
       try {
-        const response = await fetch(`/api/blaze/token-check?token=${registrationToken}`);
+        const response = await fetch(apiUrl(`/api/blaze/token-check?token=${registrationToken}`));
         if (response.ok) {
           const data = await response.json();
           document.getElementById('blazeUsername').textContent = data.blazeUsername;
@@ -405,7 +398,7 @@
 
         signBtn.innerHTML = '<span class="loading"></span>Verifying...';
 
-        const response = await fetch('/api/blaze/verify-wallet', {
+        const response = await fetch(apiUrl('/api/blaze/verify-wallet'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

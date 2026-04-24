@@ -218,19 +218,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Verification page (new OAuth-enabled version)
-app.get('/verify', (req, res) => {
+// Verification pages
+app.get('/verify/discord', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/verify.html'));
 });
-
-// Blaze verification page
-app.get('/blaze-verify', (req, res) => {
+app.get('/verify/blaze', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/blaze-verify.html'));
 });
 
-// Root redirects to verification page
+// Legacy routes (keep for backwards compatibility)
+app.get('/verify', (req, res) => {
+  res.redirect('/verify/discord');
+});
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/verify.html'));
+  res.redirect('/verify/discord');
 });
 
 // Start everything in proper order

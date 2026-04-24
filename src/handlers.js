@@ -16,7 +16,8 @@ function getVerificationMessage() {
  * Handle /linkwallet command (new simplified version)
  */
 async function handleLinkWallet(interaction) {
-  const webUrl = process.env.WEB_URL || 'http://localhost:3000/verify';
+  const baseUrl = process.env.WEB_URL || 'http://localhost:3000';
+  const webUrl = `${baseUrl}/verify/discord`;
 
   await interaction.reply({
     content: `**🔗 Link Your Wallet**\n\nClick the link below to verify your wallet:\n👉 ${webUrl}\n\n**How it works:**\n1️⃣ Login with Discord\n2️⃣ Connect your wallet\n3️⃣ Sign & verify automatically`,
