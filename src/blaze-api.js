@@ -308,9 +308,13 @@ async function getNftHolders(req, res) {
       return res.json({ success: true, holders: [] });
     }
 
+    console.log(`[holders] Contracts to check: ${contracts.length} - ${contracts.join(', ')}`);
+
     // When a specific contract is provided, check ALL registrations (not just holds_nft)
     // since holds_nft only tracks the Obeez contracts from role configs
     const registrations = contractAddress ? allRegistrations : allRegistrations.filter(r => r.holds_nft);
+
+    console.log(`[holders] Registrations to check: ${registrations.length}`);
 
     if (registrations.length === 0) {
       return res.json({ success: true, holders: [] });
@@ -331,6 +335,10 @@ async function getNftHolders(req, res) {
         } catch (error) {
           // Skip failed checks
         }
+      }
+
+      if (holder.blaze_username.toLowerCase().includes('dimi')) {
+        console.log(`[holders] DEBUG ${holder.blaze_username}: wallet=${holder.wallet_address}, nftCount=${nftCount}`);
       }
 
       return {
