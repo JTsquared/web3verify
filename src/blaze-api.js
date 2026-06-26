@@ -301,7 +301,7 @@ async function getNftHolders(req, res) {
       const erc721Configs = await db.mongoose.connection.db.collection('roleconfigs').find({
         token_type: 'ERC721'
       }).toArray();
-      contracts = erc721Configs.map(c => c.contract_address);
+      contracts = [...new Set(erc721Configs.map(c => c.contract_address))];
     }
 
     if (contracts.length === 0) {
