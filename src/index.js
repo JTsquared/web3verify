@@ -202,6 +202,7 @@ app.get('/api/blaze/check', blazeApi.checkNftStatus);
 app.get('/api/blaze/token-check', blazeApi.checkToken);
 app.put('/api/blaze/username', blazeApi.updateUsername);
 app.post('/api/blaze/register-from-discord', blazeApi.registerFromDiscord);
+app.get('/api/blaze/holders', blazeApi.getNftHolders);
 
 // Bot status endpoint
 app.get('/api/status', (req, res) => {

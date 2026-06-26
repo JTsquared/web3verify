@@ -278,6 +278,76 @@ async function checkWalletForObeezNft(walletAddress) {
   return false;
 }
 
+/**
+ * GET /api/blaze/holders?contractAddress=<optional>
+ * Returns all registered Blaze users who hold NFTs, with their blaze_username and count.
+ * If contractAddress is provided, checks that specific ERC721 contract.
+ * If omitted, checks all ERC721 role configs (Obeez default behavior).
+ */
+async function getNftHolders(req, res) {
+  try {
+    const { contractAddress } = req.query;
+    const allRegistrations = await db.getAllBlazeRegistrations();
+
+    // Determine which contracts to check
+    let contracts;
+    if (contractAddress) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(contractAddress)) {
+        return res.status(400).json({ error: 'Invalid contract address format' });
+      }
+      contracts = [contractAddress.toLowerCase()];
+    } else {
+      // Default: all ERC721 role configs (Obeez contracts)
+      const erc721Configs = await db.mongoose.connection.db.collection('roleconfigs').find({
+        token_type: 'ERC721'
+      }).toArray();
+      contracts = erc721Configs.map(c => c.contract_address);
+    }
+
+    if (contracts.length === 0) {
+      return res.json({ success: true, holders: [] });
+    }
+
+    // When a specific contract is provided, check ALL registrations (not just holds_nft)
+    // since holds_nft only tracks the Obeez contracts from role configs
+    const registrations = contractAddress ? allRegistrations : allRegistrations.filter(r => r.holds_nft);
+
+    if (registrations.length === 0) {
+      return res.json({ success: true, holders: [] });
+    }
+
+    // For each registration, get their NFT count across the target contracts
+    const holdersWithCounts = await Promise.all(registrations.map(async (holder) => {
+      let nftCount = 0;
+
+      for (const addr of contracts) {
+        try {
+          const result = await blockchainService.checkERC721Balance(
+            holder.wallet_address,
+            addr,
+            '1'
+          );
+          nftCount += parseInt(result.balance) || 0;
+        } catch (error) {
+          // Skip failed checks
+        }
+      }
+
+      return {
+        blazeUsername: holder.blaze_username,
+        nftCount
+      };
+    }));
+
+    const activeHolders = holdersWithCounts.filter(h => h.nftCount > 0);
+
+    res.json({ success: true, holders: activeHolders });
+  } catch (error) {
+    console.error('Error fetching NFT holders:', error);
+    res.status(500).json({ error: 'Failed to fetch holders' });
+  }
+}
+
 module.exports = {
   createRegistration,
   verifyBlazeWallet,
@@ -286,5 +356,6 @@ module.exports = {
   checkToken,
   updateUsername,
   registerFromDiscord,
-  checkWalletForObeezNft
+  checkWalletForObeezNft,
+  getNftHolders
 };
