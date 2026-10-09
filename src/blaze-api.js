@@ -2,6 +2,7 @@ const db = require('./database-mongo');
 const BlockchainService = require('./blockchain');
 
 const blockchainService = new BlockchainService(process.env.AVALANCHE_RPC_URL);
+const OBEEZ_CONTRACT_ADDRESS = '0x5e870b3d315f7a8d7089e8b829ed8c3d9cef06ef';
 
 /**
  * Generate verification message (must match blaze-verify.html)
@@ -248,34 +249,22 @@ async function checkToken(req, res) {
 
 /**
  * Check if a wallet holds an Obeez NFT.
- * Looks up the Obeez contract from role configs (ERC721).
+ * Checks the canonical Obeez ERC721 contract used by the Blaze holder endpoint.
  */
 async function checkWalletForObeezNft(walletAddress) {
-  // Find the Obeez NFT role config - look for ERC721 configs
-  const allGuilds = await db.mongoose.connection.db.collection('roleconfigs').find({
-    token_type: 'ERC721'
-  }).toArray();
-
-  if (allGuilds.length === 0) {
-    console.warn('No ERC721 role configs found - cannot check Obeez NFT status');
-    return false;
+  // Keep the saved holds_nft flag aligned with the live Obeez holder endpoint.
+  // Discord role configs can contain unrelated ERC721 contracts.
+  try {
+    const result = await blockchainService.checkERC721Balance(
+      walletAddress,
+      OBEEZ_CONTRACT_ADDRESS,
+      '1'
+    );
+    return result.hasBalance;
+  } catch (error) {
+    console.error(`Error checking Obeez balance for ${walletAddress}:`, error.message);
+    throw error;
   }
-
-  // Check wallet against each ERC721 config (one of them should be the Obeez contract)
-  for (const config of allGuilds) {
-    try {
-      const result = await blockchainService.checkERC721Balance(
-        walletAddress,
-        config.contract_address,
-        config.min_balance || '1'
-      );
-      if (result.hasBalance) return true;
-    } catch (error) {
-      console.error(`Error checking ERC721 balance for ${config.contract_address}:`, error.message);
-    }
-  }
-
-  return false;
 }
 
 /**
