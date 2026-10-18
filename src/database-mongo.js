@@ -330,12 +330,19 @@ async function confirmBlazeRegistration(blazeUsername, confirmationCode) {
   const registration = await BlazeRegistration.findOneAndUpdate(
     { blaze_username: blazeUsername.toLowerCase() },
     {
-      blaze_username: blazeUsername.toLowerCase(),
-      wallet_address: pending.wallet_address,
-      verified_at: Date.now(),
-      registered_via: 'blaze',
-      holds_nft: false, // Will be checked by cron job
-      nft_last_checked: null
+      $set: {
+        blaze_username: blazeUsername.toLowerCase(),
+        wallet_address: pending.wallet_address,
+        verified_at: Date.now(),
+        registered_via: 'blaze'
+      },
+      // Keep the last known chain result when an existing user re-links while
+      // the RPC is unavailable. Defaults apply only to a new registration.
+      $setOnInsert: {
+        holds_nft: false,
+        nft_count: 0,
+        nft_last_checked: null
+      }
     },
     { upsert: true, new: true }
   );

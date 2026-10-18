@@ -198,6 +198,7 @@ app.get('/api/user/status', api.getStatus);
 app.post('/api/blaze/register', blazeApi.createRegistration);
 app.post('/api/blaze/verify-wallet', blazeApi.verifyBlazeWallet);
 app.post('/api/blaze/confirm', blazeApi.confirmRegistration);
+app.post('/api/blaze/refresh', blazeApi.refreshNftStatus);
 app.get('/api/blaze/check', blazeApi.checkNftStatus);
 app.get('/api/blaze/token-check', blazeApi.checkToken);
 app.put('/api/blaze/username', blazeApi.updateUsername);

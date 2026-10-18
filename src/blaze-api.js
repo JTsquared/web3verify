@@ -1,5 +1,6 @@
 const db = require('./database-mongo');
 const BlockchainService = require('./blockchain');
+const crypto = require('crypto');
 
 const blockchainService = new BlockchainService(process.env.AVALANCHE_RPC_URL);
 const OBEEZ_CONTRACT_ADDRESS = '0x5e870b3d315f7a8d7089e8b829ed8c3d9cef06ef';
@@ -24,6 +25,47 @@ async function mapWithConcurrency(items, concurrency, mapper) {
  */
 function getVerificationMessage() {
   return `I am verifying my wallet for Web3Verify.\n\nBy signing this message, I prove ownership of my wallet.`;
+}
+
+/** POST /api/blaze/refresh - force an on-chain check for a registered username. */
+async function refreshNftStatus(req, res) {
+  const expectedToken = process.env.WEB3VERIFY_ADMIN_TOKEN;
+  const suppliedToken = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const suppliedBuffer = Buffer.from(suppliedToken);
+  const expectedBuffer = Buffer.from(expectedToken || '');
+  if (!expectedToken || suppliedBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(suppliedBuffer, expectedBuffer)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const blazeUsername = String(req.body?.blazeUsername || '').trim();
+  if (!blazeUsername) {
+    return res.status(400).json({ error: 'blazeUsername is required' });
+  }
+
+  try {
+    const registration = await db.getBlazeRegistration(blazeUsername);
+    if (!registration) {
+      return res.status(404).json({ error: `${blazeUsername} has no linked wallet` });
+    }
+
+    // Do not write a false result when the RPC is unavailable. Only a
+    // successful balance query is authoritative enough to update saved state.
+    const nftCount = await getWalletObeezNftCount(registration.wallet_address);
+    await db.updateBlazeNftStatus(blazeUsername, nftCount > 0, nftCount);
+
+    return res.json({
+      success: true,
+      blazeUsername: registration.blaze_username,
+      walletAddress: registration.wallet_address,
+      holdsNft: nftCount > 0,
+      nftCount,
+      nftStatusChecked: true
+    });
+  } catch (error) {
+    console.error(`Error manually refreshing NFT status for ${blazeUsername}:`, error);
+    return res.status(503).json({ error: 'NFT balance check failed; saved status was not changed', unknown: true });
+  }
 }
 
 /**
@@ -119,13 +161,16 @@ async function confirmRegistration(req, res) {
       return res.status(400).json({ error: 'Invalid confirmation code or registration expired' });
     }
 
-    // Immediately check NFT status for the newly registered wallet
+    // Immediately refresh the linked wallet's NFT status. An RPC error leaves
+    // the last saved result intact and is reported as an unknown refresh.
+    let nftStatusChecked = false;
     try {
       const nftCount = await getWalletObeezNftCount(registration.wallet_address);
       const hasNft = nftCount > 0;
       await db.updateBlazeNftStatus(blazeUsername, hasNft, nftCount);
       registration.holds_nft = hasNft;
       registration.nft_count = nftCount;
+      nftStatusChecked = true;
     } catch (nftError) {
       console.error('Error checking NFT status during confirmation:', nftError);
       // Non-fatal - cron job will catch it later
@@ -135,7 +180,9 @@ async function confirmRegistration(req, res) {
       success: true,
       blazeUsername: registration.blaze_username,
       walletAddress: registration.wallet_address,
-      holdsNft: registration.holds_nft
+      holdsNft: registration.holds_nft,
+      nftCount: registration.nft_count ?? null,
+      nftStatusChecked
     });
   } catch (error) {
     console.error('Error confirming Blaze registration:', error);
@@ -392,6 +439,7 @@ module.exports = {
   createRegistration,
   verifyBlazeWallet,
   confirmRegistration,
+  refreshNftStatus,
   checkNftStatus,
   checkToken,
   updateUsername,
