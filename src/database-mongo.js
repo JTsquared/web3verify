@@ -46,6 +46,7 @@ const blazeRegistrationSchema = new mongoose.Schema({
   verified_at: { type: Number, required: true },
   registered_via: { type: String, required: true, enum: ['blaze', 'discord'] },
   holds_nft: { type: Boolean, default: false },
+  nft_count: { type: Number, default: 0 },
   nft_last_checked: { type: Number, default: null }
 });
 
@@ -382,13 +383,18 @@ function getAllBlazeRegistrations() {
 /**
  * Update the NFT holding status for a Blaze registration.
  */
-async function updateBlazeNftStatus(blazeUsername, holdsNft) {
+async function updateBlazeNftStatus(blazeUsername, holdsNft, nftCount) {
+  const update = {
+    holds_nft: holdsNft,
+    nft_last_checked: Date.now()
+  };
+  if (nftCount !== undefined && nftCount !== null && Number.isFinite(Number(nftCount))) {
+    update.nft_count = Math.max(0, Number(nftCount));
+  }
+
   return BlazeRegistration.updateOne(
     { blaze_username: blazeUsername.toLowerCase() },
-    {
-      holds_nft: holdsNft,
-      nft_last_checked: Date.now()
-    }
+    update
   );
 }
 

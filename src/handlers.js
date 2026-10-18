@@ -533,8 +533,9 @@ async function handleBlazeUser(interaction) {
 
       // Check NFT status
       const blazeApi = require('./blaze-api');
-      const holdsNft = await blazeApi.checkWalletForObeezNft(primaryWallet.wallet_address);
-      await db.updateBlazeNftStatus(newBlazeUsername, holdsNft);
+      const nftCount = await blazeApi.getWalletObeezNftCount(primaryWallet.wallet_address);
+      const holdsNft = nftCount > 0;
+      await db.updateBlazeNftStatus(newBlazeUsername, holdsNft, nftCount);
 
       const nftStatus = holdsNft ? 'Obeez NFT detected!' : 'No Obeez NFT found in your primary wallet.';
       await interaction.editReply({

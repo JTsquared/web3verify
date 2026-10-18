@@ -180,22 +180,14 @@ class BlockchainService {
         case 'ERC20':
           // If there's a staking contract, try to check both wallet AND staking balance
           if (roleConfig.staking_contract) {
-            try {
-              return await this.checkERC20BalanceWithStaking(
-                walletAddress,
-                roleConfig.contract_address,
-                roleConfig.staking_contract,
-                roleConfig.min_balance
-              );
-            } catch (stakingError) {
-              // If staking check fails, fall back to wallet-only check
-              console.warn(`Staking contract check failed, falling back to wallet-only check: ${stakingError.message}`);
-              return await this.checkERC20Balance(
-                walletAddress,
-                roleConfig.contract_address,
-                roleConfig.min_balance
-              );
-            }
+            // A failed staking RPC check is unknown. Falling back to wallet-
+            // only balance could incorrectly remove a role held by stakers.
+            return await this.checkERC20BalanceWithStaking(
+              walletAddress,
+              roleConfig.contract_address,
+              roleConfig.staking_contract,
+              roleConfig.min_balance
+            );
           } else {
             // No staking, just check wallet
             return await this.checkERC20Balance(

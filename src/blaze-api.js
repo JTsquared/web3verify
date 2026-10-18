@@ -4,6 +4,21 @@ const BlockchainService = require('./blockchain');
 const blockchainService = new BlockchainService(process.env.AVALANCHE_RPC_URL);
 const OBEEZ_CONTRACT_ADDRESS = '0x5e870b3d315f7a8d7089e8b829ed8c3d9cef06ef';
 
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index], index);
+    }
+  }));
+
+  return results;
+}
+
 /**
  * Generate verification message (must match blaze-verify.html)
  */
@@ -106,9 +121,11 @@ async function confirmRegistration(req, res) {
 
     // Immediately check NFT status for the newly registered wallet
     try {
-      const hasNft = await checkWalletForObeezNft(registration.wallet_address);
-      await db.updateBlazeNftStatus(blazeUsername, hasNft);
+      const nftCount = await getWalletObeezNftCount(registration.wallet_address);
+      const hasNft = nftCount > 0;
+      await db.updateBlazeNftStatus(blazeUsername, hasNft, nftCount);
       registration.holds_nft = hasNft;
+      registration.nft_count = nftCount;
     } catch (nftError) {
       console.error('Error checking NFT status during confirmation:', nftError);
       // Non-fatal - cron job will catch it later
@@ -201,9 +218,11 @@ async function registerFromDiscord(req, res) {
 
     // Immediately check NFT status
     try {
-      const hasNft = await checkWalletForObeezNft(registration.wallet_address);
-      await db.updateBlazeNftStatus(blazeUsername, hasNft);
+      const nftCount = await getWalletObeezNftCount(registration.wallet_address);
+      const hasNft = nftCount > 0;
+      await db.updateBlazeNftStatus(blazeUsername, hasNft, nftCount);
       registration.holds_nft = hasNft;
+      registration.nft_count = nftCount;
     } catch (nftError) {
       console.error('Error checking NFT status during Discord registration:', nftError);
     }
@@ -252,6 +271,10 @@ async function checkToken(req, res) {
  * Checks the canonical Obeez ERC721 contract used by the Blaze holder endpoint.
  */
 async function checkWalletForObeezNft(walletAddress) {
+  return (await getWalletObeezNftCount(walletAddress)) > 0;
+}
+
+async function getWalletObeezNftCount(walletAddress) {
   // Keep the saved holds_nft flag aligned with the live Obeez holder endpoint.
   // Discord role configs can contain unrelated ERC721 contracts.
   try {
@@ -260,7 +283,7 @@ async function checkWalletForObeezNft(walletAddress) {
       OBEEZ_CONTRACT_ADDRESS,
       '1'
     );
-    return result.hasBalance;
+    return parseInt(result.balance, 10) || 0;
   } catch (error) {
     console.error(`Error checking Obeez balance for ${walletAddress}:`, error.message);
     throw error;
@@ -277,6 +300,23 @@ async function getNftHolders(req, res) {
   try {
     const { contractAddress } = req.query;
     const allRegistrations = await db.getAllBlazeRegistrations();
+
+    // Blaze chat uses this canonical contract for badges and voting. Serve the
+    // last successfully checked counts instead of fanning out fresh RPC calls
+    // every time a play page refreshes its role cache.
+    if (contractAddress && contractAddress.toLowerCase() === OBEEZ_CONTRACT_ADDRESS) {
+      const holders = allRegistrations
+        .filter(registration => registration.holds_nft)
+        .map(registration => ({
+          blazeUsername: registration.blaze_username,
+          // Older records predate nft_count; a confirmed holder still gets the
+          // base Obeez badge until the next successful balance check.
+          nftCount: Math.max(1, Number(registration.nft_count) || 0),
+          lastChecked: registration.nft_last_checked || null
+        }));
+
+      return res.json({ success: true, holders, cached: true });
+    }
 
     // Determine which contracts to check
     let contracts;
@@ -306,7 +346,8 @@ async function getNftHolders(req, res) {
     }
 
     // For each registration, get their NFT count across the target contracts
-    const holdersWithCounts = await Promise.all(registrations.map(async (holder) => {
+    const rpcFailures = [];
+    const holdersWithCounts = await mapWithConcurrency(registrations, 3, async (holder) => {
       let nftCount = 0;
 
       for (const addr of contracts) {
@@ -316,9 +357,10 @@ async function getNftHolders(req, res) {
             addr,
             '1'
           );
-          nftCount += parseInt(result.balance) || 0;
+          nftCount += parseInt(result.balance, 10) || 0;
         } catch (error) {
-          // Skip failed checks
+          rpcFailures.push({ username: holder.blaze_username, contract: addr, message: error.message });
+          return { blazeUsername: holder.blaze_username, nftCount: null };
         }
       }
 
@@ -326,7 +368,16 @@ async function getNftHolders(req, res) {
         blazeUsername: holder.blaze_username,
         nftCount
       };
-    }));
+    });
+
+    if (rpcFailures.length > 0) {
+      console.error(`NFT holder lookup incomplete: ${rpcFailures.length} RPC check(s) failed; returning unknown instead of partial holder data`);
+      return res.status(503).json({
+        error: 'NFT balances are temporarily unavailable',
+        unknown: true,
+        failedChecks: rpcFailures.length
+      });
+    }
 
     const activeHolders = holdersWithCounts.filter(h => h.nftCount > 0);
 
@@ -346,5 +397,6 @@ module.exports = {
   updateUsername,
   registerFromDiscord,
   checkWalletForObeezNft,
+  getWalletObeezNftCount,
   getNftHolders
 };

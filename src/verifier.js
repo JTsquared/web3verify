@@ -26,11 +26,16 @@ class VerificationService {
       await this.runVerification();
     });
 
-    // Also run on startup after a short delay
-    setTimeout(() => {
-      console.log('Running initial verification check...');
-      this.runVerification();
-    }, 10000); // 10 seconds after startup
+    // A full startup scan can generate a large RPC burst after every restart.
+    // Keep it opt-in; the daily schedule and per-registration checks remain.
+    if (process.env.VERIFY_ON_STARTUP === 'true') {
+      setTimeout(() => {
+        console.log('Running initial verification check (VERIFY_ON_STARTUP=true)...');
+        this.runVerification();
+      }, 10000);
+    } else {
+      console.log('Skipping startup verification; scheduled daily verification remains active (set VERIFY_ON_STARTUP=true to run now)');
+    }
   }
 
   /**
@@ -139,6 +144,8 @@ class VerificationService {
       // Check if ANY wallet has required tokens
       let meetsRequirements = false;
       let balanceInfo = null;
+      let walletsChecked = 0;
+      let walletCheckFailures = 0;
 
       for (const wallet of userWallets) {
         try {
@@ -146,6 +153,7 @@ class VerificationService {
             wallet.wallet_address,
             roleConfig
           );
+          walletsChecked++;
 
           if (balanceCheck.hasBalance) {
             meetsRequirements = true;
@@ -153,8 +161,17 @@ class VerificationService {
             break; // Found qualifying wallet, no need to check others
           }
         } catch (error) {
+          walletCheckFailures++;
           console.error(`Error checking wallet ${wallet.wallet_address}:`, error.message);
         }
+      }
+
+      // A failed RPC call is unknown, not proof of an insufficient balance.
+      // Preserve the current Discord role unless a wallet qualifies or every
+      // wallet was checked successfully and none qualifies.
+      if (!meetsRequirements && walletCheckFailures > 0) {
+        console.warn(`Skipping role update for ${roleConfig.role_id} / ${user.discord_id}: ${walletCheckFailures} of ${userWallets.length} wallet check(s) failed; result is unknown`);
+        return { ...result, unknown: true, walletsChecked };
       }
 
       const role = member.guild.roles.cache.get(roleConfig.role_id);
@@ -217,8 +234,9 @@ class VerificationService {
 
       for (const reg of registrations) {
         try {
-          const holdsNft = await blazeApi.checkWalletForObeezNft(reg.wallet_address);
-          await db.updateBlazeNftStatus(reg.blaze_username, holdsNft);
+          const nftCount = await blazeApi.getWalletObeezNftCount(reg.wallet_address);
+          const holdsNft = nftCount > 0;
+          await db.updateBlazeNftStatus(reg.blaze_username, holdsNft, nftCount);
           updated++;
 
           if (holdsNft !== reg.holds_nft) {
